@@ -1,6 +1,3 @@
-
-// teste git comentario
-
 //============== Declaração de Bibliotecas ====================
 // Biblioteca para criar mensagem Json.
 #include <ArduinoJson.h>
@@ -14,11 +11,8 @@
 // Biblioteca do UDP.
 #include <WiFiUdp.h>
 
-// Biblioteca do WiFi.//
+// Biblioteca do WiFi.
 #include <WiFi.h>
-
-// Biblioteca do Sensor de Corrente AC.
-#include "EmonLib.h"
 
 //============== Definição de Constantes ======================
 #define WIFI_SSID "Nycholas"
@@ -53,95 +47,121 @@ unsigned long last_time;
 // Obtém status de conexão Wifi.
 int status = WL_IDLE_STATUS;
 
-//============ Configuração da função void setup() ============
+//===============SENSOR DE VAZÃO===============
+//DEFININDO PORTA DE SINAL PARA O SENSOR DE VAZÃO
+const int portaVazao = GPIO_NUM_35;
+
+//VARIÁVEIS PARA CÁLCULO DE VAZÃO 
+static void atualizaVazao();
+volatile int pulsosVazao = 0;
+double calculoDaVazao;
+
+// INTERRUPÇÃO NA CONTAGEM DE UM PULSO
+void IRAM_ATTR gpio_isr_handler_up(void* arg)
+{
+  pulsosVazao++;
+  portYIELD_FROM_ISR();
+}
+
+void iniciaVazao(gpio_num_t Port){
+  gpio_set_direction(Port, GPIO_MODE_INPUT);
+  gpio_set_intr_type(Port, GPIO_INTR_NEGEDGE);
+  gpio_set_pull_mode(Port, GPIO_PULLUP_ONLY);
+  gpio_intr_enable(Port);
+  gpio_install_isr_service(0);
+  gpio_isr_handler_add(Port, gpio_isr_handler_up, (void*) Port);
+}
+
 void setup()
 {
-   //Inicia a comunicação serial.
-   Serial.begin(115200);
+  //INICIAR PORTA SERIAL
+  Serial.begin(115200);
 
-   // Inicializa parâmetros do sensor de corrente.
-   emon1.current(34, CURRENT_CAL);
+  //INICIAR PINO DO SENSOR DE VAZAO
+  iniciaVazao((gpio_num_t) portaVazao);
 
-   // Configura conexão MQTT.
-   client.setServer("mqtt.eclipseprojects.io", 1883);
-   
-   WiFi.begin(WIFI_SSID, WIFI_PASS);
+  // Configura conexão MQTT.
+  client.setServer("mqtt.eclipseprojects.io", 1883);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
    while ( WiFi.status() != WL_CONNECTED ) {
     delay ( 500 );
     Serial.print ( "." );
    }
-   // Inicia o cliente NTP.
-   ntp.begin();
+   
+  // Inicia o cliente NTP.
+  ntp.begin();
 
-   // Força o Update.
-   ntp.forceUpdate();
+  // Força o Update.
+  ntp.forceUpdate();
 
-   // Armazena primeira medida com a hora atual.
-   last_hour = ntp.getEpochTime();
+  // Armazena primeira medida com a hora atual.
+  last_hour = ntp.getEpochTime();
 }
+  
+void loop() {
 
-//============ Configuração da função void loop() ============
-void loop(){
-
-   // Conecta-se ao broker MQTT.
-   if ( !client.connected() ) {
-    reconnect();
+  // Conecta-se ao broker MQTT.
+  if ( !client.connected() ) {
+   reconnect();
    }
 
-   // Mantém conexão MQTT aberta.
-   client.loop();
+  // Mantém conexão MQTT aberta.
+  client.loop();
    
-   // Atualiza novas medidas a cada 1s.
-   if ( millis() - last_time > 1000 ) {
+  // Atualiza novas medidas a cada 1s.
+  if ( millis() - last_time > 1000 ) {
     
-    // Calcula Corrente AC.
-    emon1.calcVI(40,500);
 
-    // Obtém valor da corrente calculado.
-    float Current = emon1.Irms;
+  //TRANSFORMAÇÃO DOS PULSOS PARA CORRESPONDENTE VAZÃO
+  calculoDaVazao = pulsosVazao * 2.25;
+  
+  //VAZÃO POR MINUTO
+  calculoDaVazao = calculoDaVazao * 60;
+  calculoDaVazao = calculoDaVazao / 1000;
 
-    // Calcula valor aproximado da Potência Aparente.
-    float Power = Current * 220.00;
+  pulsosVazao = 0;
 
-    // Obtém horário em épocas.
-    ntp.update();
-    hour = (int) ntp.getEpochTime();
+  // Obtém horário em épocas.
+  ntp.update();
+  hour = (int) ntp.getEpochTime();
 
-    // Atualiza diferença entre horários em segundos.
-    if(last_hour != hour){
-      diff_hour = hour - last_hour;
-      last_hour = hour;
+  // Atualiza diferença entre horários em segundos.
+  if(last_hour != hour){
+    diff_hour = hour - last_hour;
+    last_hour = hour;
     }
-
-    // Devido as oscilações iniciais, limitamos a corrente em uma margem.
-    if(Current < 0.019) {
-      Current = 0.00;
-      Power = 0.00;
-    }
-
-    // Envia dados do sensor ao Broker MQTT no formato Json
+    
+  //Envia dados do sensor ao Broker MQTT no formato Json
     StaticJsonDocument<200> datas;
-    datas["Irms"] = Current;
-    datas["Power"] = Power;
+    datas["Litros por minuto"] = calculoDaVazao;
     datas["Hour"] = hour;
     datas["Diff_hour"] = diff_hour;
     String payload;
     serializeJson(datas, payload);
 
-    // Publica mensagem MQTT
+  // Publica mensagem MQTT
     client.publish("flowmeter/send", payload.c_str());
     last_time = millis();
-   } 
+   }
 }
 
+  //REALIZAR O PRINT DA LEITURA NO SERIAL
+  //Serial.println("Litros por minutos: ");
+  //Serial.println(calculoDaVazao);
+
+  //REALIZAR UM DELAY E INICIALIZAR LEITURA DAQUI A 1 SEGUNDO
+  //delay(1000);
+
 //============ Configuração da função void reconnect() ============
+
 void reconnect() {
   while (!client.connected()) {
     status = WiFi.status();
     
-    // Caso não esteja conectado ao wifi, inicia conexão
-    if ( status != WL_CONNECTED) {
-      WiFi.begin(WIFI_SSID, WIFI_PASS);
+  // Caso não esteja conectado ao wifi, inicia conexão
+  if ( status != WL_CONNECTED) {
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
       while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
@@ -150,20 +170,20 @@ void reconnect() {
     }
     Serial.print("Conectando-se ao Broker MQTT ...");
     
-    // Inicia conexão MQTT
+  // Inicia conexão MQTT
     if ( client.connect("ESP32 Device") ) {
       
-      // Conexão MQTT estabelecida.
-      Serial.println( "[MQTT DONE]" );
+  // Conexão MQTT estabelecida.
+    Serial.println( "[MQTT DONE]" );
     } else {
       
-      // Conexão MQTT falhou.
-      Serial.print( "[MQTT FAILED] [ rc = " );
-      Serial.print( client.state() );
-      Serial.println( " : retrying in 5 seconds]" );
+  // Conexão MQTT falhou.
+    Serial.print( "[MQTT FAILED] [ rc = " );
+    Serial.print( client.state() );
+    Serial.println( " : retrying in 5 seconds]" );
       
-      // Aguarda 5 segundos antes de se reconectar
+  // Aguarda 5 segundos antes de se reconectar
       delay( 5000 );
-    }
+      }
+    } 
   }
-}
