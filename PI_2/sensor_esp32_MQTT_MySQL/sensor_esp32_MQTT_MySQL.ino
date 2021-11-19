@@ -1,3 +1,6 @@
+
+// teste git comentario
+
 //============== Declaração de Bibliotecas ====================
 // Biblioteca para criar mensagem Json.
 #include <ArduinoJson.h>
