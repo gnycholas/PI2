@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="p-3 col-12">
+        <h3 class="text-monospace text-center ">Tenha todo o consumo de água na sua casa em um lugar só</h3>
+    </div>
+    <div>
+        <h4 class="text-monospace text-center text-primary" id="arduino_data"></h4>
+    </div>
+    <div class="col-12">
+<!--        <p class="p-3 m-3 text-monospace text-center ">Dado do Arduino</p>-->
+<!--        <p class="p-3 m-3 text-monospace text-center " id="arduino_data"></p>-->
+    </div>
+<!--    <div class="row w-100">-->
+<!--      <div class="col-sm-8">-->
+<!--        <div id="consumo_agua" class="consumo_agua h-100"></div>-->
+<!--      </div>-->
+<!--      <div class="col-sm-4">-->
+<!--        <div id="consumo_agua_mensal" class="consumo_agua h-100"></div>-->
+<!--      </div>-->
+<!--    </div>-->
+    <!-- google charts-->
+    <script type="text/javascript">
+<!--      google.charts.load('current', {'packages':['corechart']});-->
+<!--      google.charts.setOnLoadCallback(drawChart);-->
+
+<!--      function drawChart() {-->
+<!--        var data = google.visualization.arrayToDataTable([-->
+<!--          ['L/m', 'Consumo de agua'],-->
+
+<!--          {% for i in '0123456789'|make_list %}-->
+<!--          ['09:5{{i}}',  {{i}}000],-->
+<!--          {% endfor %}-->
+<!--        ]);-->
+
+<!--        var options = {-->
+<!--          curveType: 'function',-->
+<!--          legend: { position: 'bottom' },-->
+<!--          width: "100%",-->
+<!--          height: 500,-->
+<!--        };-->
+
+<!--        var chart = new google.visualization.LineChart(document.getElementById('consumo_agua'));-->
+
+<!--        chart.draw(data, options);-->
+<!--      }-->
+
+<!--      // column-->
+<!--      google.charts.load('current', {'packages':['bar']});-->
+<!--      google.charts.setOnLoadCallback(drawStuff);-->
+
+<!--      function drawStuff() {-->
+<!--        var data = new google.visualization.arrayToDataTable([-->
+<!--          ['', 'Litros'],-->
+<!--          ["Janeiro", 44],-->
+<!--          ["Fevereiro", 31],-->
+<!--          ["Março", 12],-->
+<!--          ["Abril", 10],-->
+<!--          ['Maio', 34],-->
+<!--          ['Junho', 33],-->
+<!--          ['Julho', 3],-->
+<!--          ['Agosto', 3],-->
+<!--          ['Setembro', 3],-->
+<!--          ['Outubro', 63],-->
+<!--          ['Novembro', 43],-->
+<!--          ['Dezembro', 23],-->
+<!--        ]);-->
+
+<!--        var options = {-->
+<!--          width: "100%",-->
+<!--          height: 500,-->
+<!--          legend: { position: 'none' },-->
+<!--          bars: 'horizontal', // Required for Material Bar Charts.-->
+<!--          bar: { groupWidth: "90%" }-->
+<!--        };-->
+
+<!--        var chart = new google.charts.Bar(document.getElementById('consumo_agua_mensal'));-->
+<!--        chart.draw(data, options);-->
+<!--      };-->
+    </script>
+</div>
+
+<script>
+
+setInterval(
+
+function(){$.ajax({
+    url: '/get-arduino-data/',
+    dataType: "json",
+    success: function (response) {
+        $('#arduino_data').html(response['calculodavazao']);
+    }
+})}, 1000);
+
+
+</script>
+{% endblock %}
